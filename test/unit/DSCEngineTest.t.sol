@@ -257,4 +257,51 @@ contract DSCEngineTest is Test {
         engineWithFailingMint.mintDsc(1 ether);
         vm.stopPrank();
     }
+
+    /////////////////////////////////////////////
+    // burnDsc Tests                           //
+    /////////////////////////////////////////////
+
+    function testBurnDscWorksProperly() public {
+        // Arrange – Setup initial deposit and mint
+        vm.startPrank(USER);
+
+        // Approve DSCEngine to spend WETH
+        ERC20Mock(weth).approve(address(engine), AMOUNT_COLLATERAL);
+
+        // Deposit collateral to allow minting DSC
+        engine.depositCollateral(weth, AMOUNT_COLLATERAL);
+
+        // Mint DSC (assume 5 DSC is within safe limits)
+        uint256 mintAmount = 5 ether;
+        engine.mintDsc(mintAmount);
+
+        // Verify that DSC was minted successfully
+        (uint256 totalDscMintedBefore,) = engine.getAccountInformation(USER);
+        assertEq(totalDscMintedBefore, mintAmount, "Minted DSC amount incorrect");
+
+        uint256 userDscBalanceBefore = dsc.balanceOf(USER);
+        assertEq(userDscBalanceBefore, mintAmount, "User DSC balance incorrect before burn");
+
+        // Act – Burn DSC
+        uint256 burnAmount = 3 ether;
+
+        // 🔹 FIX: User must approve DSCEngine to transfer their DSC tokens before burning
+        dsc.approve(address(engine), burnAmount);
+
+        engine.burnDsc(burnAmount);
+
+        // Assert – Check DSC amounts after burn
+        (uint256 totalDscMintedAfter,) = engine.getAccountInformation(USER);
+        assertEq(totalDscMintedAfter, mintAmount - burnAmount, "DSC minted amount incorrect after burn");
+
+        uint256 userDscBalanceAfter = dsc.balanceOf(USER);
+        assertEq(userDscBalanceAfter, userDscBalanceBefore - burnAmount, "User DSC balance incorrect after burn");
+
+        // Ensure health factor remains valid after burning
+        uint256 healthFactor = engine.getHealthFactor(USER);
+        assertGt(healthFactor, 1e18, "Health factor should remain valid");
+
+        vm.stopPrank();
+    }
 }
