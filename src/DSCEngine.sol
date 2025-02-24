@@ -191,7 +191,7 @@ contract DSCEngine is ReentrancyGuard {
      * @param user: The user who is insolvent. They have to have a _healthFactor below MIN_HEALTH_FACTOR
      * @param debtToCover: The amount of DSC you want to burn to cover the user's debt.
      *  @notice You can partially liquidate a user.
-     *  @notice You will get a LIQUIDATION_BONUS for taking the users funds.
+     *  @notice You will get a 10% LIQUIDATION_BONUS for taking the users funds.
      *  @notice This function working assumes that the protocol will be roughly 200% overcollateralized in order for this to work.
      *  @notice A known bug would be if the protocol was only 100% collateralized, we wouldn't be able to liquidate anyone.
      *  For example, if the price of the collateral plummeted before anyone could be liquidated.
@@ -233,8 +233,6 @@ contract DSCEngine is ReentrancyGuard {
         _revertIfHealthFactorIsBroken(msg.sender);
     }
 
-    function getHealthFactor() external view {}
-
     /////////////////////////////////////////////
     // Private and Internal View Functions     //
     /////////////////////////////////////////////
@@ -258,7 +256,7 @@ contract DSCEngine is ReentrancyGuard {
         s_collateralDeposited[from][tokenCollateralAddress] -= amountCollateral;
         emit CollateralRedeemed(from, to, tokenCollateralAddress, amountCollateral);
 
-        bool success = IERC20(tokenCollateralAddress).transferFrom(from, to, amountCollateral);
+        bool success = IERC20(tokenCollateralAddress).transfer(to, amountCollateral);
         if (!success) {
             revert DSCEngine__TransferFailed();
         }
@@ -342,5 +340,13 @@ contract DSCEngine is ReentrancyGuard {
 
     function getHealthFactor(address user) external view returns (uint256) {
         return _healthFactor(user);
+    }
+
+    function getAccountInformation(address user)
+        external
+        view
+        returns (uint256 totalDscMinted, uint256 collateralValueInUsd)
+    {
+        (totalDscMinted, collateralValueInUsd) = _getAccountInformation(user);
     }
 }
