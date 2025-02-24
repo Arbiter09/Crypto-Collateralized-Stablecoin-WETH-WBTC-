@@ -9,6 +9,7 @@ import {HelperConfig} from "../../script/HelperConfig.s.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {MockFailedTransferFrom} from "../mocks/MockFailedTransferFrom.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {MockFailedMintDSC} from "../mocks/MockFailedMintDSC.sol";
 
 contract DSCEngineTest is Test {
     DeployDSC deployer;
@@ -21,6 +22,9 @@ contract DSCEngineTest is Test {
 
     // Re-declare the event exactly as in DSCEngine
     event CollateralDeposited(address indexed user, address indexed token, uint256 indexed amount);
+    event CollateralRedeemed(
+        address indexed redeemedFrom, address indexed redeemedTo, address indexed token, uint256 amount
+    );
 
     address public USER = makeAddr("user");
     uint256 public constant AMOUNT_COLLATERAL = 10 ether;
@@ -148,6 +152,109 @@ contract DSCEngineTest is Test {
     }
 
     /////////////////////////////////////////////
-    // redeemCollateral Tests                 //
+    // redeemCollateral Tests                  //
     /////////////////////////////////////////////
+
+    function testRedeemCollateralWorksProperly() public {
+        // Arrange – User deposits collateral first.
+        // Simulate the user by starting a prank.
+        vm.startPrank(USER);
+
+        // User approves the DSCEngine to spend their collateral.
+        ERC20Mock(weth).approve(address(engine), AMOUNT_COLLATERAL);
+
+        // Deposit collateral – this transfers AMOUNT_COLLATERAL from USER to DSCEngine.
+        engine.depositCollateral(weth, AMOUNT_COLLATERAL);
+
+        // Record DSCEngine's balance of weth and the user's balance after deposit.
+        uint256 dsceBalanceBefore = ERC20Mock(weth).balanceOf(address(engine));
+        uint256 userBalanceAfterDeposit = ERC20Mock(weth).balanceOf(USER);
+
+        // Define the amount the user will redeem (e.g., half of the deposit).
+        uint256 redeemAmount = 5 ether;
+
+        // Set expectation for the CollateralRedeemed event.
+        // The event parameters are:
+        //   - redeemedFrom: USER
+        //   - redeemedTo: USER
+        //   - token: weth
+        //   - amount: redeemAmount
+        vm.expectEmit(true, true, true, true);
+        emit CollateralRedeemed(USER, USER, weth, redeemAmount);
+
+        // Act – User redeems part of their collateral.
+        engine.redeemCollateral(weth, redeemAmount);
+        vm.stopPrank();
+
+        // Assert – Check DSCEngine's token balance decreased by redeemAmount.
+        uint256 dsceBalanceAfter = ERC20Mock(weth).balanceOf(address(engine));
+        assertEq(dsceBalanceAfter, dsceBalanceBefore - redeemAmount, "DSCEngine balance incorrect after redeem");
+
+        // Assert – Check the user's token balance increased by redeemAmount.
+        uint256 userBalanceAfterRedeem = ERC20Mock(weth).balanceOf(USER);
+        assertEq(userBalanceAfterRedeem, userBalanceAfterDeposit + redeemAmount, "User balance incorrect after redeem");
+    }
+
+    /////////////////////////////////////////////
+    // mintDsc Tests                           //
+    /////////////////////////////////////////////
+
+    function testMintDscWorksProperly() public {
+        // Arrange: Start acting as the USER.
+        vm.startPrank(USER);
+
+        // User must approve DSCEngine to transfer their collateral (weth).
+        ERC20Mock(weth).approve(address(engine), AMOUNT_COLLATERAL);
+
+        // Deposit collateral into DSCEngine.
+        engine.depositCollateral(weth, AMOUNT_COLLATERAL);
+
+        // Verify initial minted DSC is zero.
+        (uint256 totalDscMinted,) = engine.getAccountInformation(USER);
+        assertEq(totalDscMinted, 0, "Initial minted DSC should be zero");
+
+        // Act: Mint DSC.
+        uint256 mintAmount = 1 ether; // Mint an amount that keeps the health factor safe.
+        engine.mintDsc(mintAmount);
+
+        // Assert: Check that the DSCEngine's record has been updated.
+        (totalDscMinted,) = engine.getAccountInformation(USER);
+        assertEq(totalDscMinted, mintAmount, "Minted DSC record is incorrect");
+
+        // Assert: Check that the DecentralizedStableCoin token balance increased accordingly.
+        uint256 dscBalance = dsc.balanceOf(USER);
+        assertEq(dscBalance, mintAmount, "User DSC token balance is incorrect");
+
+        vm.stopPrank();
+    }
+
+    function testRevertsIfMintFails() public {
+        // Arrange:
+        // Create arrays for allowed tokens and corresponding price feeds.
+        address[] memory tokenAddresses = new address[](1);
+        tokenAddresses[0] = weth;
+        address[] memory feedAddresses = new address[](1);
+        feedAddresses[0] = ethUsdPriceFeed;
+
+        // Deploy a mock DSC that always fails on mint.
+        MockFailedMintDSC failingDsc = new MockFailedMintDSC();
+
+        // Deploy a new DSCEngine instance that uses the failing DSC.
+        DSCEngine engineWithFailingMint = new DSCEngine(tokenAddresses, feedAddresses, address(failingDsc));
+
+        // Transfer ownership of the failing DSC to DSCEngine.
+        // This makes DSCEngine authorized to call mint on the DSC.
+        failingDsc.transferOwnership(address(engineWithFailingMint));
+
+        // Deposit collateral so that the user's health factor is safe.
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(engineWithFailingMint), AMOUNT_COLLATERAL);
+        engineWithFailingMint.depositCollateral(weth, AMOUNT_COLLATERAL);
+
+        // Act & Assert:
+        // DSCEngine calls mint on failingDsc, which returns false. DSCEngine should then revert with DSCEngine__MintFailed.
+        vm.expectRevert(DSCEngine.DSCEngine__MintFailed.selector);
+        engineWithFailingMint.mintDsc(1 ether);
+        vm.stopPrank();
+    }
 }

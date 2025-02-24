@@ -280,6 +280,10 @@ contract DSCEngine is ReentrancyGuard {
         // total collateral VALUE
 
         (uint256 totalDscMinted, uint256 collateralValueInUsd) = _getAccountInformation(user);
+        // If no DSC has been minted, return the maximum possible value for health factor.
+        if (totalDscMinted == 0) {
+            return type(uint256).max;
+        }
         uint256 collateralAdjustedForThreshold = (collateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
 
         return (collateralAdjustedForThreshold * PRECISION) / totalDscMinted; // PRECISION = 1e18
