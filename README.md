@@ -1,66 +1,125 @@
-## Foundry
+# Crypto-Collateralized Stablecoin (WETH & WBTC)
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+## Overview
 
-Foundry consists of:
+This project implements a decentralized, exogenously collateralized, algorithmically stabilized stablecoin pegged to USD. The stablecoin is backed by wrapped Ethereum (WETH) and wrapped Bitcoin (WBTC). The system ensures over-collateralization to maintain stability and prevent insolvency.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Features
 
-## Documentation
+- **Exogenous Collateralization**: Supports WETH & WBTC as collateral.
+- **Over-Collateralization**: Ensures the total value of collateral is always higher than the stablecoin supply.
+- **Decentralized Governance**: Uses smart contract-based rules to manage minting, burning, deposits, and liquidations.
+- **Price Stability**: Maintains a $1 peg by ensuring proper collateralization.
+- **Liquidation Mechanism**: Ensures users remain solvent through an enforced health factor.
 
-https://book.getfoundry.sh/
+## Smart Contracts
+
+### 1. **DecentralizedStableCoin.sol**
+
+- Implements ERC20 with burn functionality.
+- Only the DSCEngine can mint and burn tokens.
+- Ensures that minted amounts follow protocol rules.
+
+### 2. **DSCEngine.sol**
+
+- Manages collateral deposits, withdrawals, and DSC minting.
+- Enforces liquidation rules based on health factors.
+- Uses Chainlink price oracles for asset valuation.
+- Ensures the stablecoin remains over-collateralized.
+
+### 3. **OracleLib.sol**
+
+- Provides Chainlink price feed validation.
+- Ensures price data is not stale before usage.
+
+## Installation & Setup
+
+### Prerequisites
+
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) (for testing and deployment)
+- Node.js & npm (for scripts, if required)
+
+### Steps
+
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/Arbiter09/Crypto-Collateralized-Stablecoin-WETH-WBTC-.git
+   cd Crypto-Collateralized-Stablecoin-WETH-WBTC-
+   ```
+2. Install dependencies:
+   ```sh
+   forge install
+   ```
+3. Set up environment variables:
+   ```sh
+   cp .env.example .env
+   ```
+   - Add your private key in `.env` for deployment on live networks.
 
 ## Usage
 
-### Build
+### Deploying Contracts
 
-```shell
-$ forge build
+Run the deploy script:
+
+```sh
+forge script script/DeployDSC.s.sol --broadcast --rpc-url YOUR_RPC_URL
 ```
 
-### Test
+### Interacting with the Stablecoin
 
-```shell
-$ forge test
+- **Deposit collateral**:
+  ```solidity
+  engine.depositCollateral(address(weth), amount);
+  ```
+- **Mint DSC**:
+  ```solidity
+  engine.mintDsc(amount);
+  ```
+- **Burn DSC**:
+  ```solidity
+  engine.burnDsc(amount);
+  ```
+- **Redeem collateral**:
+  ```solidity
+  engine.redeemCollateral(address(weth), amount);
+  ```
+- **Liquidate insolvent accounts**:
+  ```solidity
+  engine.liquidate(address(weth), user, debtToCover);
+  ```
+
+## Testing
+
+### Running Tests
+
+To execute the test suite, run:
+
+```sh
+forge test
 ```
 
-### Format
+### Test Structure
 
-```shell
-$ forge fmt
-```
+#### **Unit Tests** (`unit/DSCEngineTest.t.sol`)
 
-### Gas Snapshots
+- Tests core functionalities of DSCEngine and DSC.
+- Checks minting, burning, collateral deposits, and liquidation mechanisms.
 
-```shell
-$ forge snapshot
-```
+#### **Fuzz Tests** (`fuzz/Handler.t.sol`)
 
-### Anvil
+- Uses random inputs to test edge cases for minting and redeeming collateral.
 
-```shell
-$ anvil
-```
+#### **Invariant Tests** (`fuzz/Invariants.t.sol`)
 
-### Deploy
+- Ensures the protocol remains over-collateralized at all times.
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
+## License
 
-### Cast
+This project is licensed under the **MIT License**.
 
-```shell
-$ cast <subcommand>
-```
+## Acknowledgments
 
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+- Inspired by MakerDAO's DAI.
+- Uses Foundry for Solidity development and testing.
+- Uses OpenZeppelin's ERC20 implementation.
