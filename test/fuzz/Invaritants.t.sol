@@ -13,6 +13,7 @@ import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
 import {DSCEngine} from "../../src/DSCEngine.sol";
 import {HelperConfig} from "../../script/HelperConfig.s.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Handler} from "./Handler.t.sol";
 
 contract Invariants is StdInvariant, Test {
     DeployDSC deployer;
@@ -21,20 +22,15 @@ contract Invariants is StdInvariant, Test {
     HelperConfig config;
     address weth;
     address wbtc;
+    Handler handler;
 
     function setUp() external {
         deployer = new DeployDSC();
         (dsc, engine, config) = deployer.run();
         (,, weth, wbtc,) = config.activeNetworkConfig();
-
-        console.log("DSCEngine Address: ", address(engine));
-        console.log("DSC Address: ", address(dsc));
-        console.log("WETH Address: ", weth);
-        console.log("WBTC Address: ", wbtc);
-
-        require(address(engine) != address(0), "DSCEngine address is zero!");
-
-        targetContract(address(engine));
+        //targetContract(address(engine));
+        handler = new Handler(engine, dsc);
+        targetContract(address(handler));
     }
 
     function invariant_protocolMustHaveMoreValueThanTotalSupply() public view {
@@ -48,9 +44,15 @@ contract Invariants is StdInvariant, Test {
         uint256 wethValue = engine.getUsdValue(weth, totalWethDeposited);
         uint256 wbtcValue = engine.getUsdValue(wbtc, totalWbtcDeposited);
 
-        console.log(wethValue);
-        console.log(wbtcValue);
+        console.log("weth value: ", wethValue);
+        console.log("wbtc value: ", wbtcValue);
+        console.log("Total Supply:", totalSupply);
+        console.log("Times mint was called:", handler.timesMintIsCalled());
 
         assert(wethValue + wbtcValue >= totalSupply);
+    }
+
+    function invariant_gettersShouldNotRevert() public view {
+        engine.getPrecision();
     }
 }

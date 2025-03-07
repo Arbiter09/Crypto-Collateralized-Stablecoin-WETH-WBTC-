@@ -37,7 +37,7 @@ contract OpeninvariantsTest is StdInvariant, Test {
         targetContract(address(engine));
     }
 
-    function invariant_protocolMustHaveMoreValueThanTotalSupply() public view {
+    function OpenInvariant_protocolMustHaveMoreValueThanTotalSupply() public view {
         // get the value of all the collateral in the protocol
         // compare it to all the debt (dsc)
 
